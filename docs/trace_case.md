@@ -33,7 +33,7 @@ Lệnh in ra ba phần: các event trong trace (`reply`, `decision`, `model_over
 
 | Trường | Nội dung |
 |---|---|
-| Trial | `seeded_regression C-002@11`, trial run ID `R-seeded_regression-C-002-s11`; report run ID sẽ bổ sung khi sinh baseline M4. |
+| Trial | `seeded_regression C-002@11`, trial run ID `R-seeded_regression-C-002-s11`; report run ID `E-seeded_regression-20261118-2078` trong `src/reports/eval_seeded_regression.json`. |
 | Triệu chứng | `lab8.metrics.trial_pass` báo `status resolved != denied`; reply báo đã hoàn 20.000đ, ledger ghi 20.000đ trong khi label là 0đ. |
 | Bước sai đầu tiên | Event 3 `model_override` với payload `{"delay_days": 5}`. |
 | Vì sao là bước đầu tiên | Event 1 `handoff` chỉ cấp read tools; event 2 `investigator.lookup_order.order.delay_days=2` phản ánh DB đúng. Event 3 thay fact DB bằng lời khai ticket, trước quote và ghi ledger. |
