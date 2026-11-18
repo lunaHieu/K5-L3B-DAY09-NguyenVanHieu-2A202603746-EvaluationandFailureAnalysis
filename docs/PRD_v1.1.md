@@ -48,7 +48,7 @@ Quy tắc: tiền và phê duyệt luôn chấm bằng code. Judge chỉ dùng c
 
 ## 5. Cổng release
 - Lệnh: `python -m lab9.gate --pr reports/eval_<shape>.json --baseline reports/baseline_v1.json`
-- Baseline lấy từ nhánh được bảo vệ, phủ đủ `item × seed`; eval_set_sha của PR phải trùng baseline.
+- Workflow hiện đọc `reports/baseline_v1.json` trong commit của PR và đối chiếu với lần chạy `swarm` mới bằng `lab9.ci_check`; sau merge, file này nằm trên `main`. Gate kiểm đủ `item × seed` và yêu cầu `eval_set_sha` của PR trùng baseline. Workflow chưa tải baseline độc lập từ `main` được bảo vệ.
 - Gate exit 1 → **không merge**. Nguyễn Văn Hiếu (eval owner) đọc metric, row và trace, tạo regression test rồi sửa lỗi trong phạm vi cho phép. Waiver chỉ sau khi Product owner và eval owner duyệt, ghi lý do và bằng chứng trong PR; không sửa report tay hay nới threshold cùng eval-set version.
 
 ## 6. Bằng chứng còn thiếu / rủi ro mở
@@ -66,4 +66,4 @@ Quy tắc: tiền và phê duyệt luôn chấm bằng code. Judge chỉ dùng c
 | Vai trò | Tên | Ngày |
 |---|---|---|
 | Product | Chưa chỉ định | Chưa phê duyệt |
-| Eval owner (giữ gate) | Nguyễn Văn Hiếu | 18/11/2026 — bản nháp chờ CI |
+| Eval owner (giữ gate) | Nguyễn Văn Hiếu | 18/11/2026 — bản nháp, CI PR #1 đã xanh; chờ review/merge |

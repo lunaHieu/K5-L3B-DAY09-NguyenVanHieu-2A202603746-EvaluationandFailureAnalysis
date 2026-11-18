@@ -1,5 +1,7 @@
 # Source code — Lab 8 LogiX-VN
 
+> Đây là README kế thừa từ `src/` của Day8. Với bài Lab9, đọc [README Day9](../README.md), [chỉ mục tài liệu](../docs/README.md) và [hướng dẫn report Lab9](reports/README.md). Phần dưới mô tả bài Day8 và chỉ dùng để tham chiếu code/contract gốc.
+
 Toàn bộ code, dữ liệu, config và test của lab nằm trong thư mục này. **Mọi lệnh chạy trong `src/`** (thư mục có file `README.md` này và `requirements.txt`).
 
 - File bắt đầu chạy: `lab8/smoke.py` (kiểm cài đặt), `lab8/run.py` (chạy một claim), `lab8/benchmark.py` (so 4 shape).
@@ -17,7 +19,7 @@ Toàn bộ code, dữ liệu, config và test của lab nằm trong thư mục n
 | `config/` | `autonomy_policy.yaml`, `pricing.yaml`, `tools.manifest.v1.1.yaml` |
 | `data/` | Fixture public: `public_claims.jsonl`, `public_world_state.json` |
 | `tests/` | Cổng host (mặc định) và ma trận student T01–T14 (marker `student`) |
-| `reports/` | Bằng chứng do công cụ sinh ra, xem [reports/README.md](reports/README.md) |
+| `reports/` | Bằng chứng do công cụ sinh ra, xem [báo cáo Day8](https://github.com/VinUni-AI20k/K5-Day8-From-Workflows-to-Agents/blob/main/src/reports/README.md) |
 | `eval/` | Ghi chú về bộ hidden, xem [eval/README.md](eval/README.md) |
 | `scripts/` | Script sinh lại fixture public (dành cho người soạn bài) |
 | `harness_map.yaml`, `pytest.ini`, `requirements.txt` | Cấu hình harness, pytest và thư viện |
@@ -26,7 +28,7 @@ Toàn bộ code, dữ liệu, config và test của lab nằm trong thư mục n
 
 Cần **Python 3.11, 3.12 hoặc 3.13** và `git`. Mọi lệnh chạy trong **thư mục `src/`** của repo (thư mục có file `requirements.txt`).
 
-`<url-repo-nhom>` là URL **repo nhóm** đã tạo ở bước 0 của [README gốc](../README.md#bắt-đầu), không phải repo đề bài.
+`<url-repo-nhom>` là URL **repo nhóm** đã tạo ở bước 0 của [README gốc](https://github.com/VinUni-AI20k/K5-Day8-From-Workflows-to-Agents/blob/main/README.md), không phải repo đề bài.
 
 Kiểm tra phiên bản Python trước:
 
@@ -122,18 +124,18 @@ Bộ hidden phủ: ticket nói dối, injection, approval hỏng hoặc mượn 
 
 **Điểm yếu cố ý của swarm:** ở seed chia hết cho 5 (seed 55), swarm tin số ngày ghi trong ticket thay vì cột `delay_days`. Trên bộ public, chỗ này lộ ra ở T02: ticket ghi "trễ 5 ngày", order ghi 2 ngày, swarm trả 20.000 VND thay vì từ chối. Vì vậy benchmark public của swarm ra pass ≈ 0.986, pass^5 ≈ 0.929. Trong ma trận student, trial đó được kiểm là *phải fail* với swarm. Shape của nhóm thì phải pass.
 
-Ngưỡng hidden và ba điều kiện must-pass: xem [README gốc](../README.md#thế-nào-là-qua-bài) và [RUBRIC.md](../RUBRIC.md#must-pass-không-bù-điểm). Công thức metric: [docs/metrics.md](../docs/metrics.md).
+Ngưỡng hidden và ba điều kiện must-pass: xem [README gốc](https://github.com/VinUni-AI20k/K5-Day8-From-Workflows-to-Agents/blob/main/README.md) và [RUBRIC.md](https://github.com/VinUni-AI20k/K5-Day8-From-Workflows-to-Agents/blob/main/RUBRIC.md). Công thức metric: [docs/metrics.md](https://github.com/VinUni-AI20k/K5-Day8-From-Workflows-to-Agents/blob/main/docs/metrics.md).
 
 ## Đọc khi bắt đầu viết shape (CP2)
 
-Đầu buổi (CP1) đọc CHECKPOINTS và docs theo [README gốc](../README.md#đọc-gì-khi-nào). Khi bắt đầu viết shape thì đọc:
+Đầu buổi (CP1) đọc CHECKPOINTS và docs theo [README gốc](https://github.com/VinUni-AI20k/K5-Day8-From-Workflows-to-Agents/blob/main/README.md). Khi bắt đầu viết shape thì đọc:
 
 - `lab8/shapes/swarm_reference.py`: shape đối chứng. Khối `REFERENCE_WEAKNESS` là chỗ swarm tin ticket. Workflow không được copy khối này.
 - `lab8/durability.py`: transaction và idempotency key `refund:{claim_id}`.
 - `lab8/handoff.py`: allowlist.
 - `lab8/runtime.py`: vòng ReAct và investigator read-only.
 - `config/autonomy_policy.yaml`, `config/tools.manifest.v1.1.yaml`, `harness_map.yaml`.
-- [docs/business_rules.md](../docs/business_rules.md) và [docs/contracts.md](../docs/contracts.md): luật nghiệp vụ, `RunResult` và trace mà grader chấm.
+- [docs/business_rules.md](https://github.com/VinUni-AI20k/K5-Day8-From-Workflows-to-Agents/blob/main/docs/business_rules.md) và [docs/contracts.md](https://github.com/VinUni-AI20k/K5-Day8-From-Workflows-to-Agents/blob/main/docs/contracts.md): luật nghiệp vụ, `RunResult` và trace mà grader chấm.
 
 ## Tự kiểm trên bộ hidden (CP5)
 
@@ -145,4 +147,4 @@ python -m lab8.benchmark --shapes workflow,single,orchestrator --cases student_d
 
 Không có nhãn nên không ra pass rate. Lệnh này cho biết shape có chạy hết 40 claim mà không lỗi không (`status` ≠ `error`), trace có đúng contract không, và có trial nào nghi lộ secret không (`leak_suspect`). Điểm chính thức do grader của giảng viên chấm.
 
-Gặp lỗi khi cài hoặc chạy: xem [docs/troubleshooting.md](../docs/troubleshooting.md).
+Gặp lỗi khi cài hoặc chạy: xem [docs/troubleshooting.md](https://github.com/VinUni-AI20k/K5-Day8-From-Workflows-to-Agents/blob/main/docs/troubleshooting.md).
