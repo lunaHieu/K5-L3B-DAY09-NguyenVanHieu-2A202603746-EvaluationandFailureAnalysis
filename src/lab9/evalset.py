@@ -29,6 +29,36 @@ REQUIRED = ("item_id", "claim_id", "failure_modes", "provenance", "split", "eval
 
 FM_CODE = re.compile(r"FM-\d{2}")
 
+# What each public claim is designed to exercise. Keep this in the builder so a
+# fresh --build reproduces the reviewed tags rather than erasing the JSONL edits.
+PUBLIC_FAILURE_MODES: dict[str, tuple[str, ...]] = {
+    "C-001": ("FM-01", "FM-04"),
+    "C-002": ("FM-03",),
+    "C-003": ("FM-01", "FM-04"),
+    "C-004": ("FM-01",),
+    "C-005": ("FM-01", "FM-09"),
+    "C-006": ("FM-06",),
+    "C-007": ("FM-02",),
+    "C-008": ("FM-04", "FM-08"),
+    "C-009": ("FM-02",),
+    "C-010": ("FM-07",),
+    "C-011": ("FM-07",),
+    "C-012": ("FM-07",),
+    "C-013": ("FM-02", "FM-05"),
+    "C-014": ("FM-04", "FM-05", "FM-08"),
+}
+
+TRACE_PROVENANCE = {
+    "C-001": "leaky_trace:C-001@11",
+    "C-002": "seeded_regression:C-002@11",
+    "C-005": "fixed:C-005@11",
+    "C-006": "stale_clause:C-006@11",
+    "C-007": "seeded_regression:C-007@11",
+    "C-008": "misreport:C-008@11",
+    "C-010": "sibling_refund:C-010@11",
+    "C-014": "sum_parts:C-014@11",
+}
+
 
 def load_jsonl(path: Path) -> list[dict[str, Any]]:
     return [json.loads(line) for line in path.read_text(encoding="utf-8").splitlines() if line.strip()]
@@ -43,18 +73,19 @@ def build(source: Path = SOURCE) -> tuple[int, int]:
     items, labels = [], {}
     for n, claim in enumerate(claims, start=1):
         item_id = f"E-{n:03d}"
+        claim_id = claim["claim_id"]
+        modes = PUBLIC_FAILURE_MODES.get(claim_id, ())
         items.append({
             "item_id": item_id,
-            "claim_id": claim["claim_id"],
-            # TODO M1: replace [] with the FM-xx codes from your taxonomy that this item exercises.
-            "failure_modes": [],
+            "claim_id": claim_id,
+            "failure_modes": list(modes),
             "provenance": {"source": "lab8_public", "matrix_id": claim.get("matrix_id"),
-                           "from_trace": None, "generator": None,
-                           "label_by": "lab8_matrix", "checked_by": None},
+                           "from_trace": TRACE_PROVENANCE.get(claim_id), "generator": None,
+                           "label_by": "lab8_matrix", "checked_by": "lab8_public_matrix"},
             "split": "regression",
             "eval_set_version": VERSION,
         })
-        labels[claim["claim_id"]] = claim["expected"]
+        labels[claim_id] = claim["expected"]
     ITEMS.parent.mkdir(parents=True, exist_ok=True)
     ITEMS.write_text("".join(json.dumps(i, ensure_ascii=False) + "\n" for i in items), encoding="utf-8")
     LABELS.write_text(json.dumps(labels, ensure_ascii=False, indent=2), encoding="utf-8")
