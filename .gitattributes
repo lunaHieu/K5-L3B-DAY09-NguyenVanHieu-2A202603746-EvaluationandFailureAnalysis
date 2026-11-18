@@ -1,0 +1,2 @@
+# Keep eval-set checkout bytes identical to committed baseline reports on every OS.
+src/data/eval/eval_set_v*.jsonl text eol=crlf
