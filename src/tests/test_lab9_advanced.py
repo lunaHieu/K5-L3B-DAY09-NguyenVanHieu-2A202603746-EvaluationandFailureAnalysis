@@ -148,3 +148,37 @@ def test_integrity_flags_finite_summary_changed_without_rows():
     forged = copy.deepcopy(base)
     forged["metrics"]["pass_rate"] = 0.95
     assert any("differs from rows" in issue for issue in gate.integrity_check(forged, base, SPEC))
+
+
+def test_integrity_reports_invalid_row_cost_instead_of_crashing():
+    from lab9 import gate
+    from lab9.eval import aggregate
+
+    rows = copy.deepcopy(ROWS)
+    for row in rows:
+        row["cost"] = 1.0
+    spec = dict(SPEC, metrics=[*SPEC["metrics"],
+                               {"id": "cost_per_success", "kind": "system", "blocking": False,
+                                "threshold": {"max_increase": 0.1}}])
+    base = _report(rows, aggregate(rows, ["pass_rate"]))
+    for bad in (None, float("nan")):
+        forged = copy.deepcopy(base)
+        forged["rows"][0]["cost"] = bad
+        blocked, lines = gate.check(forged, base, spec)
+        assert blocked == ["integrity"]
+        assert any("invalid cost" in line for line in lines)
+
+
+def test_gate_returns_integrity_for_malformed_manifest_and_slices():
+    from lab9 import gate
+
+    base = _report(copy.deepcopy(ROWS), {"pass_rate": 1.0})
+    missing_manifest = copy.deepcopy(base)
+    missing_manifest.pop("manifest")
+    blocked, lines = gate.check(missing_manifest, base, SPEC)
+    assert blocked == ["integrity"] and "manifest" in lines[0]
+
+    bad_slices = copy.deepcopy(base)
+    bad_slices["rows"][0]["slices"] = [["denial"]]
+    blocked, lines = gate.check(bad_slices, base, SPEC)
+    assert blocked == ["integrity"] and any("slice tags" in line for line in lines)

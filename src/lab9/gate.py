@@ -41,8 +41,9 @@ def integrity_check(pr: dict, base: dict, spec: dict, base_spec: dict | None = N
         problems.append("metrics missing or malformed")
         metrics = {}
     for metric, value in metrics.items():
-        if isinstance(value, (int, float)) and not isinstance(value, bool) and not math.isfinite(value):
-            problems.append(f"metric {metric} is not finite")
+        if value is not None and (isinstance(value, bool) or not isinstance(value, (int, float))
+                                  or not math.isfinite(value)):
+            problems.append(f"metric {metric} is not a finite number")
     if not isinstance(pr.get("evaluator_failures"), list):
         problems.append("evaluator_failures missing or malformed")
     elif pr["evaluator_failures"]:
@@ -50,14 +51,19 @@ def integrity_check(pr: dict, base: dict, spec: dict, base_spec: dict | None = N
 
     rows = pr.get("rows")
     base_rows = base.get("rows")
-    manifest = pr.get("manifest") or {}
+    manifest = pr.get("manifest")
+    if not isinstance(manifest, dict):
+        problems.append("manifest missing or malformed")
+        manifest = {}
     seeds = manifest.get("seeds")
     items = manifest.get("items")
     if not isinstance(rows, list) or not isinstance(base_rows, list):
         problems.append("rows missing or malformed")
         return problems
-    if not isinstance(seeds, list) or not seeds or len(seeds) != len(set(seeds)):
-        problems.append("manifest seeds missing or duplicated")
+    if (not isinstance(seeds, list) or not seeds or
+            any(isinstance(seed, bool) or not isinstance(seed, int) for seed in seeds) or
+            len(seeds) != len(set(seeds))):
+        problems.append("manifest seeds missing, invalid or duplicated")
     if not isinstance(items, int) or isinstance(items, bool) or items < 1:
         problems.append("manifest items invalid")
     if isinstance(seeds, list) and isinstance(items, int) and len(rows) != items * len(seeds):
@@ -66,7 +72,8 @@ def integrity_check(pr: dict, base: dict, spec: dict, base_spec: dict | None = N
     def pairs(report_rows: list[dict]) -> list[tuple[str, int]]:
         found = []
         for row in report_rows:
-            if not isinstance(row, dict) or not isinstance(row.get("item_id"), str) or not isinstance(row.get("seed"), int):
+            if (not isinstance(row, dict) or not isinstance(row.get("item_id"), str) or
+                    isinstance(row.get("seed"), bool) or not isinstance(row.get("seed"), int)):
                 problems.append("row has invalid item_id or seed")
                 continue
             found.append((row["item_id"], row["seed"]))
@@ -83,14 +90,23 @@ def integrity_check(pr: dict, base: dict, spec: dict, base_spec: dict | None = N
         problems.append("row seed missing from manifest")
 
     graded = [m["id"] for m in spec.get("metrics", []) if m.get("id") in GRADERS]
+    needs_cost = any(m["id"] == "cost_per_success" for m in spec.get("metrics", []))
+    scores_valid = costs_valid = True
     for row in rows:
-        if isinstance(row, dict):
-            for metric in graded:
-                if row.get(metric) is None:
-                    problems.append(f"row {row.get('item_id')}@{row.get('seed')} has missing {metric}")
-                    break
-    if rows and all(isinstance(row, dict) and "cost" in row and
-                    all(metric in row for metric in graded) for row in rows):
+        if not isinstance(row, dict):
+            scores_valid = costs_valid = False
+            continue
+        for metric in graded:
+            if not isinstance(row.get(metric), bool):
+                problems.append(f"row {row.get('item_id')}@{row.get('seed')} has invalid {metric}")
+                scores_valid = False
+                break
+        if needs_cost or "cost" in row:
+            cost = row.get("cost")
+            if isinstance(cost, bool) or not isinstance(cost, (int, float)) or not math.isfinite(cost):
+                problems.append(f"row {row.get('item_id')}@{row.get('seed')} has invalid cost")
+                costs_valid = False
+    if rows and scores_valid and costs_valid and all("cost" in row for row in rows):
         recomputed = aggregate(rows, graded, k_values=spec.get("pass_k", []))
         for metric, expected in recomputed.items():
             actual = metrics.get(metric)
@@ -106,8 +122,14 @@ def integrity_check(pr: dict, base: dict, spec: dict, base_spec: dict | None = N
         if not isinstance(row, dict):
             continue
         key = (row.get("item_id"), row.get("seed"))
+        if not isinstance(key[0], str) or not isinstance(key[1], int):
+            continue
+        tags = row.get("slices")
+        if not isinstance(tags, list) or any(not isinstance(tag, str) for tag in tags):
+            problems.append(f"invalid slice tags for {key[0]}@{key[1]}")
+            continue
         old = base_by_pair.get(key)
-        if old is not None and set(row.get("slices") or []) != set(old.get("slices") or []):
+        if old is not None and set(tags) != set(old.get("slices") or []):
             problems.append(f"slice tags changed for {key[0]}@{key[1]}")
 
     if base_spec is not None:
@@ -187,7 +209,13 @@ def slice_check(pr: dict, base: dict, spec: dict) -> tuple[list[str], list[str]]
 
 
 def check(pr: dict, base: dict, spec: dict, base_spec: dict | None = None) -> tuple[list[str], list[str]]:
-    if pr["manifest"]["eval_set_sha"] != base["manifest"]["eval_set_sha"]:
+    pr_manifest, base_manifest = pr.get("manifest"), base.get("manifest")
+    if not isinstance(pr_manifest, dict) or not isinstance(base_manifest, dict):
+        return ["integrity"], ["  INTEGRITY manifest missing or malformed"]
+    pr_sha, base_sha = pr_manifest.get("eval_set_sha"), base_manifest.get("eval_set_sha")
+    if not isinstance(pr_sha, str) or not pr_sha or not isinstance(base_sha, str) or not base_sha:
+        return ["integrity"], ["  INTEGRITY eval_set_sha missing or malformed"]
+    if pr_sha != base_sha:
         return ["eval_set_sha"], ["  EVAL SET differs from the baseline's: re-run the baseline on the same eval set"]
     problems = integrity_check(pr, base, spec, base_spec)
     if problems:
@@ -237,7 +265,9 @@ def main(argv: list[str] | None = None) -> int:
     base = json.loads(Path(args.baseline).read_text(encoding="utf-8"))
     base_spec = load_spec(Path(args.base_spec)) if args.base_spec else None
     blocked, lines = check(pr, base, load_spec(Path(args.spec)), base_spec)
-    print(f"gate: PR {pr['run_id']} vs main {base['run_id']} · eval set {pr['manifest']['eval_set_sha']}")
+    manifest = pr.get("manifest") if isinstance(pr.get("manifest"), dict) else {}
+    print(f"gate: PR {pr.get('run_id', '<missing>')} vs main {base.get('run_id', '<missing>')} "
+          f"· eval set {manifest.get('eval_set_sha', '<missing>')}")
     print("\n".join(lines))
     if blocked:
         print(f"exit 1 — blocked: {', '.join(blocked)}")
