@@ -31,6 +31,14 @@ def test_pass_k_rejects_bad_args(stats):
             stats.pass_at_k(*args)
 
 
+
+@pytest.mark.parametrize("args", [(0, 0, 1), (5, -1, 1), (5, 2, -1),
+                                   (5, 2, 1.5), (True, 1, 1), (5, 6, 1)])
+def test_both_pass_k_estimators_reject_invalid_args(stats, args):
+    for fn in (stats.pass_at_k, stats.pass_hat_k):
+        with pytest.raises(ValueError):
+            fn(*args)
+
 def _report(rows, metrics, items=4, seeds=(1, 2)):
     return {"manifest": {"eval_set_sha": "x", "items": items, "seeds": list(seeds)},
             "rows": rows, "metrics": metrics, "evaluator_failures": []}
