@@ -44,8 +44,43 @@ def slice_check(pr: dict, base: dict, spec: dict) -> tuple[list[str], list[str]]
       - fail if below "min", or if no_significant_drop and the paired CI over the slice's items
         lies entirely below 0
     Return (blocked ids like "slice:money_movement/pass_rate", report lines)."""
-    # TODO M5
-    return [], []
+    blocked: list[str] = []
+    lines: list[str] = []
+    bs = spec.get("bootstrap", {})
+    for rule in spec.get("slices", []):
+        name, metric = rule["name"], rule["metric"]
+        slice_id = f"slice:{name}/{metric}"
+        pr_items = per_item(pr, metric, slice_name=name)
+        base_items = per_item(base, metric, slice_name=name)
+        value = sum(pr_items.values()) / len(pr_items) if pr_items else None
+        verdict = "ok"
+        notes = []
+        if value is None:
+            verdict = "missing"
+        elif "min" in rule and value < rule["min"]:
+            verdict = "fail"
+        if rule.get("no_significant_drop"):
+            if not pr_items or pr_items.keys() != base_items.keys():
+                verdict = "missing"
+                notes.append("paired slice items differ")
+            else:
+                keys = sorted(pr_items)
+                delta, lo, hi = stats.paired_bootstrap(
+                    [pr_items[k] for k in keys], [base_items[k] for k in keys],
+                    n_resamples=bs.get("n_resamples", 1000),
+                    rng=bs.get("rng", 2027),
+                    confidence=bs.get("confidence", 0.95),
+                )
+                notes.append(f"Δ {delta:+.3f} CI [{lo:+.3f}, {hi:+.3f}]")
+                if hi < 0:
+                    verdict = "fail"
+        if verdict != "ok" and rule.get("blocking"):
+            blocked.append(slice_id)
+        label = {"ok": "ok", "missing": "MISSING"}.get(
+            verdict, "BLOCK" if rule.get("blocking") else "warn")
+        lines.append(f"  {slice_id:<32} {value!s:<8} min={rule.get('min')!s:<5} "
+                     f"{' '.join(notes):<28} {label}")
+    return blocked, lines
 
 
 def check(pr: dict, base: dict, spec: dict, base_spec: dict | None = None) -> tuple[list[str], list[str]]:
