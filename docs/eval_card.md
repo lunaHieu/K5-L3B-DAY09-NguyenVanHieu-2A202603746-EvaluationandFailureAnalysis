@@ -38,6 +38,7 @@ Card này đi kèm mỗi báo cáo và được dùng lại ở Day 10. Số li�
 ## M5–M6 — Eval set v2 và độ ổn định
 
 - **Run ID / eval set SHA:** baseline v2 `E-swarm-20261118-0cf9` (`src/reports/baseline_v2.json`), `flaky_regression` `E-flaky_regression-20261118-0cf9`; eval set SHA `0cf9d7b668ef`, 28 item × 5 seed. Các report v2 được sinh bằng `lab9.eval` và commit cùng M7.
+- **Phiên bản v2:** code sinh report (`eval.py`, `stats.py`) tại commit `12f89c4`; grader tiền/reply tại commit `6fbff2c`; gate M7 tại commit `5de3b85` (bao gồm kiểm tra report hỏng). Metric spec v2.0, Python 3.13.2, MockLLM, seeds 11/22/33/44/55. Report JSON không chứa code SHA, nên các commit được ghi tại đây.
 - **A/A và ngưỡng:** `python -m lab9.mutation --spec config/metric_spec_v2.yaml --aa 66,77,88,99,110` cho `pass_hat_5` = 0.8929 trên cả seed 11/22/33/44/55 và 66/77/88/99/110, Δ = 0 trong MockLLM. Sàn blocking 0.80 thấp hơn cả hai kết quả 0.0929, nằm ngoài dải nhiễu A/A đã quan sát; với LLM thật phải đo lại A/A vì nhiễu có thể > 0.
 - **Độ ổn định:** `flaky_regression` đạt `pass_rate` 0.9143 (trên sàn 0.85) nhưng `pass_hat_5` chỉ 0.5714 (dưới sàn 0.80), nên gate chặn. Trong replay công khai này paired CI của `pass_rate` cũng chặn; `pass_hat_5` là tín hiệu trực tiếp cho việc cả 5 lần đều thành công.
 - **Slice:** `slice_regression` có `pass_rate` toàn tập 0.9357, Δ −0.043 với CI [−0.121, +0.029]; chỉ slice `money_movement` chặn (`pass_rate` 0.85 < 0.90), còn `adversarial` 0.9143 và `denial` 1.0 đều qua. `fixed` và `honest_refactor` qua gate.
