@@ -11,11 +11,13 @@ from __future__ import annotations
 
 import argparse
 import json
+import math
 from pathlib import Path
 
 from lab8.console import utf8_stdio
 from lab9 import stats
-from lab9.eval import SPEC, load_spec, per_item
+from lab9.eval import SPEC, aggregate, load_spec, per_item
+from lab9.graders import GRADERS
 
 
 def integrity_check(pr: dict, base: dict, spec: dict, base_spec: dict | None = None) -> list[str]:
@@ -33,8 +35,109 @@ def integrity_check(pr: dict, base: dict, spec: dict, base_spec: dict | None = N
         including dropping no_significant_drop)
       - an item's slice tags in PR rows differ from the baseline's (relabelling an item out of a
         slice hides its regression from the slice gate)"""
-    # TODO M7
-    return []
+    problems: list[str] = []
+    metrics = pr.get("metrics")
+    if not isinstance(metrics, dict):
+        problems.append("metrics missing or malformed")
+        metrics = {}
+    for metric, value in metrics.items():
+        if isinstance(value, (int, float)) and not isinstance(value, bool) and not math.isfinite(value):
+            problems.append(f"metric {metric} is not finite")
+    if not isinstance(pr.get("evaluator_failures"), list):
+        problems.append("evaluator_failures missing or malformed")
+    elif pr["evaluator_failures"]:
+        problems.append("evaluator_failures non-empty")
+
+    rows = pr.get("rows")
+    base_rows = base.get("rows")
+    manifest = pr.get("manifest") or {}
+    seeds = manifest.get("seeds")
+    items = manifest.get("items")
+    if not isinstance(rows, list) or not isinstance(base_rows, list):
+        problems.append("rows missing or malformed")
+        return problems
+    if not isinstance(seeds, list) or not seeds or len(seeds) != len(set(seeds)):
+        problems.append("manifest seeds missing or duplicated")
+    if not isinstance(items, int) or isinstance(items, bool) or items < 1:
+        problems.append("manifest items invalid")
+    if isinstance(seeds, list) and isinstance(items, int) and len(rows) != items * len(seeds):
+        problems.append("row count does not match manifest items × seeds")
+
+    def pairs(report_rows: list[dict]) -> list[tuple[str, int]]:
+        found = []
+        for row in report_rows:
+            if not isinstance(row, dict) or not isinstance(row.get("item_id"), str) or not isinstance(row.get("seed"), int):
+                problems.append("row has invalid item_id or seed")
+                continue
+            found.append((row["item_id"], row["seed"]))
+        return found
+
+    pr_pairs, base_pairs = pairs(rows), pairs(base_rows)
+    if len(set(pr_pairs)) != len(pr_pairs):
+        problems.append("duplicate (item_id, seed) row")
+    if set(pr_pairs) != set(base_pairs):
+        problems.append("PR (item_id, seed) set differs from baseline")
+    if isinstance(items, int) and len({item for item, _ in pr_pairs}) != items:
+        problems.append("unique item count differs from manifest")
+    if isinstance(seeds, list) and any(seed not in seeds for _, seed in pr_pairs):
+        problems.append("row seed missing from manifest")
+
+    graded = [m["id"] for m in spec.get("metrics", []) if m.get("id") in GRADERS]
+    for row in rows:
+        if isinstance(row, dict):
+            for metric in graded:
+                if row.get(metric) is None:
+                    problems.append(f"row {row.get('item_id')}@{row.get('seed')} has missing {metric}")
+                    break
+    if rows and all(isinstance(row, dict) and "cost" in row and
+                    all(metric in row for metric in graded) for row in rows):
+        recomputed = aggregate(rows, graded, k_values=spec.get("pass_k", []))
+        for metric, expected in recomputed.items():
+            actual = metrics.get(metric)
+            if expected is None:
+                if actual is not None:
+                    problems.append(f"metric {metric} differs from rows")
+            elif not isinstance(actual, (int, float)) or not math.isfinite(actual) or not math.isclose(
+                    actual, expected, rel_tol=0, abs_tol=5e-5):
+                problems.append(f"metric {metric} differs from rows")
+    base_by_pair = {(r["item_id"], r["seed"]): r for r in base_rows if isinstance(r, dict)
+                    and isinstance(r.get("item_id"), str) and isinstance(r.get("seed"), int)}
+    for row in rows:
+        if not isinstance(row, dict):
+            continue
+        key = (row.get("item_id"), row.get("seed"))
+        old = base_by_pair.get(key)
+        if old is not None and set(row.get("slices") or []) != set(old.get("slices") or []):
+            problems.append(f"slice tags changed for {key[0]}@{key[1]}")
+
+    if base_spec is not None:
+        if spec.get("eval_set_version") != base_spec.get("eval_set_version"):
+            problems.append("eval_set_version changed without a matching baseline")
+        for field, key_fn in (("metrics", lambda x: x["id"]),
+                              ("slices", lambda x: (x["name"], x["metric"]))):
+            current = {key_fn(x): x for x in spec.get(field, [])}
+            for old in base_spec.get(field, []):
+                key = key_fn(old)
+                if key not in current:
+                    problems.append(f"{field} {key} removed")
+                    continue
+                new = current[key]
+                old_rule = old.get("threshold", {}) if field == "metrics" else old
+                new_rule = new.get("threshold", {}) if field == "metrics" else new
+                if old.get("blocking") and not new.get("blocking"):
+                    problems.append(f"{field} {key} no longer blocking")
+                if old_rule.get("no_significant_drop") and not new_rule.get("no_significant_drop"):
+                    problems.append(f"{field} {key} removed no_significant_drop")
+                for bound in ("min", "max", "max_increase"):
+                    if bound not in old_rule:
+                        continue
+                    value = new_rule.get(bound)
+                    if not isinstance(value, (int, float)) or not math.isfinite(value):
+                        problems.append(f"{field} {key} removed {bound}")
+                    elif ((bound == "min" and value < old_rule[bound]) or
+                          (bound != "min" and value > old_rule[bound])):
+                        problems.append(f"{field} {key} loosened {bound}")
+    return problems
 
 
 def slice_check(pr: dict, base: dict, spec: dict) -> tuple[list[str], list[str]]:

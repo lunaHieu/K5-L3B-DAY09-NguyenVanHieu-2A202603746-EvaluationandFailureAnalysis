@@ -37,8 +37,15 @@ Card này đi kèm mỗi báo cáo và được dùng lại ở Day 10. Số li�
 
 ## M5–M6 — Eval set v2 và độ ổn định
 
-- **Run ID / eval set SHA:** baseline v2 `E-swarm-20261118-0cf9` (`src/reports/baseline_v2.json`), `flaky_regression` `E-flaky_regression-20261118-0cf9`; eval set SHA `0cf9d7b668ef`, 28 item × 5 seed. Report v2 được sinh bằng `lab9.eval` và đang để local cho tới khi hoàn tất M7.
+- **Run ID / eval set SHA:** baseline v2 `E-swarm-20261118-0cf9` (`src/reports/baseline_v2.json`), `flaky_regression` `E-flaky_regression-20261118-0cf9`; eval set SHA `0cf9d7b668ef`, 28 item × 5 seed. Các report v2 được sinh bằng `lab9.eval` và commit cùng M7.
 - **A/A và ngưỡng:** `python -m lab9.mutation --spec config/metric_spec_v2.yaml --aa 66,77,88,99,110` cho `pass_hat_5` = 0.8929 trên cả seed 11/22/33/44/55 và 66/77/88/99/110, Δ = 0 trong MockLLM. Sàn blocking 0.80 thấp hơn cả hai kết quả 0.0929, nằm ngoài dải nhiễu A/A đã quan sát; với LLM thật phải đo lại A/A vì nhiễu có thể > 0.
 - **Độ ổn định:** `flaky_regression` đạt `pass_rate` 0.9143 (trên sàn 0.85) nhưng `pass_hat_5` chỉ 0.5714 (dưới sàn 0.80), nên gate chặn. Trong replay công khai này paired CI của `pass_rate` cũng chặn; `pass_hat_5` là tín hiệu trực tiếp cho việc cả 5 lần đều thành công.
 - **Slice:** `slice_regression` có `pass_rate` toàn tập 0.9357, Δ −0.043 với CI [−0.121, +0.029]; chỉ slice `money_movement` chặn (`pass_rate` 0.85 < 0.90), còn `adversarial` 0.9143 và `denial` 1.0 đều qua. `fixed` và `honest_refactor` qua gate.
 - **Giới hạn cỡ mẫu:** 28 item v2 vẫn là pack công khai chạy MockLLM; 5 seed không bảo đảm phát hiện ổn định bug chỉ xuất hiện ở khoảng 1/3 seed. Không hạ sàn để làm gate bắt một biến thể cụ thể; cần thêm seed và dữ liệu held-out trước khi kết luận trên LLM thật.
+
+## M7 — Kiểm tra toàn vẹn release gate
+
+- `lab9.traps` sinh bốn trap công khai: `evaluator_errors_as_nan`, `dropped_failing_rows`, `cherry_picked_seeds`, `loosened_spec`. Cả bốn lệnh gate riêng đều exit 1 với lý do `INTEGRITY`; trap cuối dùng `--base-spec` để kiểm ratchet.
+- Gate kiểm số row, tập `(item_id, seed)` và dòng trùng, lỗi evaluator kể cả khi run xanh, giá trị grader thiếu, nhãn slice bị đổi, metric không hữu hạn, metric tổng hợp lệch row, và việc nới hoặc bỏ metric/slice trong cùng eval-set version.
+- Baseline v2 tự so với chính nó exit 0. `lab9.mutation` đạt 3/3 regression bị chặn, 0 báo nhầm trên `fixed` và `honest_refactor`.
+- **Giới hạn:** bộ công khai không thay thế test ẩn. Một report có cả row và metric bị giả mạo nhất quán vẫn cần đối chiếu trace và nguồn chạy đáng tin cậy; gate này chưa xác thực chữ ký hoặc provenance ngoài report.

@@ -39,6 +39,7 @@ def test_both_pass_k_estimators_reject_invalid_args(stats, args):
         with pytest.raises(ValueError):
             fn(*args)
 
+
 def _report(rows, metrics, items=4, seeds=(1, 2)):
     return {"manifest": {"eval_set_sha": "x", "items": items, "seeds": list(seeds)},
             "rows": rows, "metrics": metrics, "evaluator_failures": []}
@@ -112,3 +113,38 @@ def test_slice_check_rejects_mismatched_slice_items():
     blocked, lines = gate.slice_check(_report(rows, {"pass_rate": 1.0}), base, spec)
     assert blocked == ["slice:denial/pass_rate"]
     assert "paired slice items differ" in lines[0]
+
+def test_integrity_flags_duplicate_rows_and_green_run_failures():
+    from lab9 import gate
+
+    base = _report(copy.deepcopy(ROWS), {"pass_rate": 1.0})
+    duplicate = copy.deepcopy(base)
+    duplicate["rows"][-1] = copy.deepcopy(duplicate["rows"][0])
+    assert any("duplicate" in issue for issue in gate.integrity_check(duplicate, base, SPEC))
+    crashed = copy.deepcopy(base)
+    crashed["evaluator_failures"] = ["grader crashed"]
+    assert any("evaluator_failures" in issue for issue in gate.integrity_check(crashed, base, SPEC))
+
+
+def test_integrity_flags_slice_relabel_and_removed_slice_rule():
+    from lab9 import gate
+
+    base = _report(copy.deepcopy(ROWS), {"pass_rate": 1.0})
+    relabelled = copy.deepcopy(base)
+    relabelled["rows"][0]["slices"] = []
+    assert any("slice tags" in issue for issue in gate.integrity_check(relabelled, base, SPEC))
+    old_spec = dict(SPEC, slices=[{"name": "denial", "metric": "pass_rate", "min": 0.9,
+                                   "no_significant_drop": True, "blocking": True}])
+    assert any("removed" in issue for issue in gate.integrity_check(base, base, SPEC, old_spec))
+
+def test_integrity_flags_finite_summary_changed_without_rows():
+    from lab9 import gate
+    from lab9.eval import aggregate
+
+    rows = copy.deepcopy(ROWS)
+    for row in rows:
+        row["cost"] = 1.0
+    base = _report(rows, aggregate(rows, ["pass_rate"]))
+    forged = copy.deepcopy(base)
+    forged["metrics"]["pass_rate"] = 0.95
+    assert any("differs from rows" in issue for issue in gate.integrity_check(forged, base, SPEC))
